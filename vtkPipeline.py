@@ -96,6 +96,9 @@ class vtkPipeline():
       self.mesh3DActor = None
       self.outputMesh = None
       self.output3DMesh = None
+      self.contourActor = None
+      self.centerlineActor = None
+
 
    def vtkCreateGeometricInformations(self):
       """ Creation du texte d'information geometrique"""
@@ -124,6 +127,18 @@ class vtkPipeline():
       """ Creation des donnees initiales """
       self.path = read_path
       #-----------------------------------------
+      # Creation de la donnee volumique
+      #-----------------------------------------
+      self.vtkReadVolumAll(os.path.join(self.path,'image.raw'))
+      self.valSagittal = (self.lig-1)/2
+      self.valCoronal = (self.col-1)/2
+      self.valTransversal = (self.nb_coupe-1)/2
+      self.min_pixel_value = self.NumpyData.min()
+      self.max_pixel_value = self.NumpyData.max()
+      if self.valSeuil >= self.max_pixel_value :
+         self.valSeuil = (self.max_pixel_value - self.min_pixel_value)/2
+      self.VOI_pt2 = [self.col,self.lig,self.nb_coupe]
+      #-----------------------------------------
       # Start by creatin a black/white lookup table.
       #-----------------------------------------
       self.bwLut = vtk.vtkLookupTable()
@@ -132,16 +147,6 @@ class vtkPipeline():
       self.bwLut.SetHueRange(0, 0)
       self.bwLut.SetValueRange(0, 1)
       self.bwLut.Build()
-      #-----------------------------------------
-      # Creation de la donnee volumique
-      #-----------------------------------------
-      self.vtkReadVolumAll(os.path.join(self.path,'image.raw'))
-      self.valSagittal = (self.lig-1)/2
-      self.valCoronal = (self.col-1)/2
-      self.valTransversal = (self.nb_coupe-1)/2
-      if self.valSeuil >= self.max_pixel_value :
-         self.valSeuil = (self.max_pixel_value - self.min_pixel_value)/2
-      self.VOI_pt2 = [self.col,self.lig,self.nb_coupe]
       #-----------------------------------------
       # Creation de la bounding box
       #-----------------------------------------
@@ -270,8 +275,8 @@ class vtkPipeline():
       meshNormals.SetInputConnection(surface_filter.GetOutputPort())
       meshNormals.Update()
       
-      self.surfNode  = vtk_to_np(surface_filter.GetOutput().GetPoints().GetData())
-      self.surfTable = vtk_to_np(surface_filter.GetOutput().GetPolys().GetData())
+      self.surfNode  = vtk_to_np(self.smoothAneurysm.GetOutput().GetPoints().GetData())
+      self.surfTable = vtk_to_np(self.smoothAneurysm.GetOutput().GetPolys().GetData())
       
       #-----------------------------------------
       # Realisation du mapper ppour affichage
@@ -302,13 +307,9 @@ class vtkPipeline():
       self.ren.AddActor(self.aneurysm)
       self.vtkRedraw()
       
-      listActors = self.ren.GetActors()
-      self.CAA = listActors.GetLastActor()
-      
    def vtkDeletePlotIsoContour(self):
       """ Fonction de suppression de l'affichage"""
-      #~ self.ren.RemoveActor(self.aneurysm)
-      self.ren.RemoveActor(self.CAA)
+      self.ren.RemoveActor(self.aneurysm)
       self.vtkRedraw()
       self.aneurysm = None
       
@@ -358,7 +359,7 @@ class vtkPipeline():
       self.NumpyData = np.zeros((self.lig,self.col,self.nb_coupe),int)
       for i in range(self.nb_coupe):
          self.NumpyData[:,:,i] = vtk_to_np(self.vtkVolumAll.GetImage(i+1).GetPointData().GetArray(0)).reshape(self.lig,self.col)
-      
+         
    def vtkVOIdata(self, volum = 'GAUSSIAN'):
       """ Modification du volume d'interet """
       #-----------------------------------------
@@ -371,23 +372,26 @@ class vtkPipeline():
                            self.VOI_pt1[2], self.VOI_pt2[2])
       
       self.vtkVolumBlur = vtk.vtkImageGaussianSmooth()
-      
+      #-----------------------------------------
+      # Creation du volume sur volume filtre gaussien
+      #-----------------------------------------
       if volum == 'GAUSSIAN':
          self.vtkVolumBlur.SetInputConnection(self.vtkVolum.GetOutputPort()) 
-      
+      #-----------------------------------------
+      # Creation du volume sur volume filtre gradient + gaussien
+      #-----------------------------------------
       if volum == 'GRADIENT':
          self.vtkVolumGrad = vtk.vtkImageGradientMagnitude()
          self.vtkVolumGrad.SetDimensionality(3)
          self.vtkVolumGrad.HandleBoundariesOn()
          self.vtkVolumGrad.SetInputConnection(self.vtkVolum.GetOutputPort())
-         
          self.vtkVolumBlur.SetInputConnection(self.vtkVolumGrad.GetOutputPort()) 
       
       self.vtkVolumBlur.SetStandardDeviation(self.valGaussianFilter)
       self.vtkVolumBlur.Update()
       self.vtkVolumRange = self.vtkVolumBlur.GetOutput().GetScalarRange()
       
-      print " self.vtkVolumGradRange : ", self.vtkVolumRange
+      print " Range from Volume Of Interest : ", self.vtkVolumRange
       
    def vtkHistogram(self):
       """Fonction de creation de l'histogramme """
@@ -403,17 +407,7 @@ class vtkPipeline():
       print "Maximum : ",data.max()
       print "Minimum : ",data.min()
       
-      
-      
-      Histogram = np.histogram(data,int((data.max() - data.min())/100.0))
-      
-      print Histogram[0].shape,Histogram[1].shape
-      print "Calcul de l'hsitogramme"
-      
-      #~ pl.figure()
-      #~ pl.plot(Histogram[1][:-1],np.log(Histogram[0]),'or')
-      #~ pl.show()
-      
+      Histogram = np.histogram(data,np.arange(data.min(),data.max(),1))
 
    def vtkCreateCamera(self):
       """ Creation de la camera de visualisation """
@@ -799,23 +793,23 @@ class vtkPipeline():
    def vtkPlotCenterline(self, vtkCenterLine):
       "Affichage de la centerline"
       
+      self.ren.RemoveActor(self.centerlineActor)
+      self.vtkRedraw()
+      self.centerlineActor = None
+      
       reverse = vtk.vtkReverseSense()
       reverse.SetInputConnection(vtkCenterLine.GetOutputPort())
       reverse.ReverseCellsOff()
       reverse.ReverseNormalsOff()
       
-      self.meshMapper = vtk.vtkPolyDataMapper()
+      self.centerLineMapper = vtk.vtkPolyDataMapper()
       if vtk.VTK_MAJOR_VERSION <= 5:
-          self.meshMapper.SetInput(reverse.GetOutput())
+          self.centerLineMapper.SetInput(reverse.GetOutput())
       else:
-          self.meshMapper.SetInputConnection(reverse.GetOutputPort())
-
-      self.centerlineActor = None
-      self.centerlineActor = vtk.vtkActor()
-      self.centerlineActor.SetMapper(self.meshMapper)
-      #~ self.meshActor.GetProperty().SetDiffuseColor(1, 0.2, 0.2)
-      #~ self.meshActor.GetProperty().SetOpacity(1.0)
+          self.centerLineMapper.SetInputConnection(reverse.GetOutputPort())
       
+      self.centerlineActor = vtk.vtkActor()
+      self.centerlineActor.SetMapper(self.centerLineMapper)
       self.centerlineActor.GetProperty().SetDiffuseColor(1.0000, 0.3882, 0.2784)
       self.centerlineActor.GetProperty().SetSpecularColor(1, 1, 1)
       self.centerlineActor.GetProperty().SetSpecular(.4)
@@ -823,4 +817,37 @@ class vtkPipeline():
       
       self.ren.AddActor(self.centerlineActor)
       self.vtkRedraw()
-
+      
+   def vtkPlotContour(self, vtkContour):
+      "Affichage d'un contour"
+      
+      self.ren.RemoveActor(self.contourActor)
+      self.vtkRedraw()
+      self.contourActor = None
+      
+      self.contourMapper = vtk.vtkPolyDataMapper()
+      if vtk.VTK_MAJOR_VERSION <= 5:
+          self.contourMapper.SetInput(vtkContour.GetOutput())
+      else:
+          self.contourMapper.SetInputConnection(vtkContour.GetOutputPort())
+      
+      self.contourActor = vtk.vtkActor()
+      self.contourActor.SetMapper(self.contourMapper)
+      self.contourActor.GetProperty().SetDiffuseColor(0.0000, 1.0, 0.0)
+      self.contourActor.GetProperty().SetSpecularColor(1, 1, 1)
+      self.contourActor.GetProperty().SetSpecular(.4)
+      self.contourActor.GetProperty().SetSpecularPower(50)
+      
+      self.ren.AddActor(self.contourActor)
+      self.vtkRedraw()
+   
+   def vtkDeleteCenterLine(self):
+      "Suppression visuelle des geometrie des centerLines"
+      
+      self.ren.RemoveActor(self.contourActor)
+      self.vtkRedraw()
+      self.contourActor = None
+      
+      self.ren.RemoveActor(self.centerlineActor)
+      self.vtkRedraw()
+      self.centerlineActor = None

@@ -93,6 +93,8 @@ class centerlineMesh():
       self.nbDof = self.meshNode.shape[0]
       self.nbElem = self.meshTable.shape[0]
       
+      np.save('connec.npy',self.meshTable)
+      
       print "----------------------------------------------------"
       print " nb nodes   : ",self.nbDof
       print " nb bulks   : ",self.nbElem
@@ -113,9 +115,9 @@ class centerlineMesh():
             boundaryEdge.append([tri[1], tri[2]])
          if len((np.sum((self.meshTable==tri[2])*1 + (self.meshTable==tri[0])*1,axis = 1) == 2).nonzero()[0])==1 :
             boundaryEdge.append([tri[2], tri[0]])
-            
+      
       boundaryEdge = np.array(boundaryEdge)
-
+      
       # Decomposition des frontieres
       boundary = {}
       j = 0
@@ -146,7 +148,8 @@ class centerlineMesh():
       print "Some boundary are detect"
       for name in self.boundarys.keys():
          print "Boundary - ",name
-         self.writeVTKContour( self.meshNode[boundary[name],:], name+'vtp')
+         #~ self.createVTKContour( self.meshNode[self.boundarys[name],:] )
+         #~ self.writeVTKContour( name+'vtp')
          self.listBoundary.append(name)
       print "----------------------------------------------------"
       
@@ -459,32 +462,35 @@ class centerlineMesh():
       nodes = np.delete(nodes,0,axis = 0)
       value = np.delete(value,0)
       
+      
       for i in range(nb-2):
          dist = np.linalg.norm((nodes - order_nodes[i,:]),axis = 1)
          inds = dist.argsort()
          # Premier passage qui indique la direction de recherche
-         if i == 0 :
-            order_nodes[1,:] = nodes[inds[0],:]
-            order_value[1]   = value[inds[0]]
-            vec = order_nodes[1,:] - order_nodes[0,:]
-            nodes = np.delete(nodes,inds[0],axis = 0)
-            value = np.delete(value,inds[0])
+         #~ if i == 0 :
+         order_nodes[1,:] = nodes[inds[0],:]
+         order_value[1]   = value[inds[0]]
+         vec = order_nodes[1,:] - order_nodes[0,:]
+         nodes = np.delete(nodes,inds[0],axis = 0)
+         value = np.delete(value,inds[0])
          # pour les autres segments on cherche le point le plus proches 
          # dans la bonne direction (produit scalaire > 0)
-         else :
-            ok = True
-            j = 0
-            while ok :
-               vec_j = nodes[inds[j],:] - order_nodes[i,:]
-               ok = not(np.dot(vec_j,vec) > 0.0)
-               j += 1
-            #on a trouve le bon candidat
-            # le candidat j-1 est dans la bonne direction
-            order_nodes[i+1,:] = nodes[inds[j-1],:]
-            order_value[i+1]   = value[inds[j-1]]
-            vec = order_nodes[i+1,:] - order_nodes[i,:]
-            nodes = np.delete(nodes,inds[j-1],axis = 0)
-            value = np.delete(value,inds[j-1])
+         #~ else :
+            #~ ok = True
+            #~ j = 0
+            #~ while ok :
+               #~ print j, inds[j], i
+               #~ vec_j = nodes[inds[j],:] - order_nodes[i,:]
+               #~ print np.dot(vec_j,vec)
+               #~ ok = not(np.dot(vec_j,vec) > 0.0)
+               #~ j += 1
+            #~ #on a trouve le bon candidat
+            #~ # le candidat j-1 est dans la bonne direction
+            #~ order_nodes[i+1,:] = nodes[inds[j-1],:]
+            #~ order_value[i+1]   = value[inds[j-1]]
+            #~ vec = order_nodes[i+1,:] - order_nodes[i,:]
+            #~ nodes = np.delete(nodes,inds[j-1],axis = 0)
+            #~ value = np.delete(value,inds[j-1])
                
       # Il reste maintenant qu'un seul point que l'on ajoute
       order_nodes[nb-1,:] = nodes[0,:]
@@ -572,8 +578,8 @@ class centerlineMesh():
       writer.SetInput(self.profileTubes.GetOutput())
       writer.Write()
 
-   def writeVTKContour(self, nodes, filename):
-      "Create data in VTK format to compute isocontour"
+   def createVTKContour(self, nodes):
+      "charge un contour en memoire"
 
       # Conteneur du profil
       pts = vtk.vtkPoints()
@@ -586,14 +592,22 @@ class centerlineMesh():
          lines.InsertCellPoint(n)
       lines.InsertCellPoint(0)
          
-      profileData = vtk.vtkPolyData()
-      profileData.SetPoints(pts)
-      profileData.SetLines(lines)
+      self.profileContour = vtk.vtkPolyData()
+      self.profileContour.SetPoints(pts)
+      self.profileContour.SetLines(lines)
       
+      # Add thickness to the resulting line.
+      self.profileContourTubes = vtk.vtkTubeFilter()
+      self.profileContourTubes.SetNumberOfSides(10)
+      self.profileContourTubes.SetInput(self.profileContour)
+      self.profileContourTubes.SetRadius(0.2)
+      
+   def writeVTKContour(self, filename):
+      "Create data in VTK format to compute isocontour"
       # Add thickness to the resulting line.
       writer = vtk.vtkXMLPolyDataWriter()
       writer.SetFileName(filename+'.vtp')
-      writer.SetInput(profileData)
+      writer.SetInput(self.profileContour)
       writer.Write()
 
    def computeCenterLine(self):

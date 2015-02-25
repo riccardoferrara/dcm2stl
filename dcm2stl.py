@@ -721,6 +721,31 @@ class dcm2stl(wx.Frame):
    def onSliderArtery(self, evt):
       """Affiche une boite de dialogue pour reglage par slider du contour """
       
+      if not(self.toolsArtery.IsChecked()):
+         self.PleaseCompute(evt)
+         wx.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+         #-----------------------------------------
+         # Creation de la donnee surface
+         #-----------------------------------------
+         self.vtkPipe.vtkCreateIsoContour(config = self.config['SEGMENTATION_TYPE'])
+         #-----------------------------------------
+         # Creation du filtrage de la surface
+         #-----------------------------------------
+         self.vtkPipe.vtkCreateFilterIsoContour()
+         #-----------------------------------------
+         # Creation des infos geometrique
+         #-----------------------------------------
+         self.vtkPipe.vtkComputeGeometricSurface()
+         self.vtkPipe.vtkCreateGeometricInformations()
+         #-----------------------------------------
+         # Affichage du contour surfacique
+         #-----------------------------------------
+         self.vtkPipe.vtkPlotIsoContour()
+         self.vtkPipe.vtkRedraw()
+         wx.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+         self.DestroyCompute()
+         self.toolsMenu.Check(self.toolsArtery.GetId(), True)
+         
       self.sliderArteryDialog = wx.Dialog(self, id=wx.ID_ANY, title="Surfacic contour parameters ", size=wx.Size(240, 600), style=wx.DEFAULT_DIALOG_STYLE)
       #-----------------------------------------
       # Slider valeur du seuil
@@ -785,6 +810,7 @@ class dcm2stl(wx.Frame):
       self.PleaseCompute(evt)
       self.vtkPipe.vtkComputeGeometricSurface()
       self.vtkPipe.vtkCreateGeometricInformations()
+      self.vtkPipe.vtkCreateFilterIsoContour()
       if self.toolsInfoGeo.IsChecked() : 
          self.vtkPipe.vtkInfoGeo.SetInput(self.vtkPipe.GeoInfos)
       self.vtkPipe.vtkRedraw()
@@ -1023,6 +1049,8 @@ class dcm2stl(wx.Frame):
          #~ self.vtkPipe.vtkPlotBoundingVOI()
          #~ self.meshMenu.Check(self.toolsCenterline.GetId(), True)
       
+      self.centerline.listBoundary = []
+      
       self.centerlineDialog = wx.Dialog(self, id=wx.ID_ANY, title="Centerlines parameters ", size=wx.Size(240, 600), style=wx.DEFAULT_DIALOG_STYLE)
       #-----------------------------------------
       # Choix de la surface support de calcul
@@ -1039,8 +1067,8 @@ class dcm2stl(wx.Frame):
       #-----------------------------------------
       wx.StaticText(self.centerlineDialog, id=wx.ID_ANY, label = "Select two boundary :", pos = (10, 120))
       self.listBoxArtery = wx.ListBox(self.centerlineDialog, id=wx.ID_ANY, pos = (20, 140), size=wx.Size(200, 160), choices= self.centerline.listBoundary, style = wx.LB_EXTENDED)
-      #~ self.Bind(wx.EVT_LISTBOX, self.EvtMultiListBox, self.listBoxArtery)
-      #~ self.listBoxArtery.Bind(wx.EVT_RIGHT_UP, self.EvtRightButton)
+      self.listBoxArtery.Bind(wx.EVT_LISTBOX, self.onSelectContour, self.listBoxArtery)
+      #~ self.listBoxArtery.Bind(wx.EVT_RIGHT_UP, self.onDeleteContour)
       self.listBoxArtery.SetSelection(0)
       #-----------------------------------------
       # Slider pour le reglage de la resolution
@@ -1077,10 +1105,20 @@ class dcm2stl(wx.Frame):
       obj = evt.GetEventObject()
       self.centerline.filter = obj.GetValue()
 
+   def onSelectContour(self, evt):
+      "User a selectionner une arete des contours"
+      namebd = self.listBoxArtery.GetSelections()
+      nodeList = []
+      for bd in namebd:
+         for node in self.centerline.boundarys[self.centerline.listBoundary[bd]]:
+            nodeList.append(node)
+         
+      self.centerline.createVTKContour( self.centerline.meshNode[nodeList,:])
+      self.vtkPipe.vtkPlotContour(self.centerline.profileContourTubes)
+
    def onComputeCenterLine(self, evt):
       "User a choisi les frontieres de la centerline"
       namebd = self.listBoxArtery.GetSelections()
-      print namebd
       
       self.centerline.computeSol(self.centerline.listBoundary[namebd[0]], self.centerline.listBoundary[namebd[1]])
       self.centerline.computeCenterLine()
@@ -1101,7 +1139,9 @@ class dcm2stl(wx.Frame):
 
    def onCloseCenterlineDialog(self, evt):
       """ Fermeture de la boite de dialogue SliderVOI"""
-      self.centerlineDialog.Close(True) 
+      self.vtkPipe.vtkDeleteCenterLine()
+      self.centerlineDialog.Close(True)
+      
 
 #----------------------------------------------------------------------------------------------
 class MySplashScreen(wx.SplashScreen):
