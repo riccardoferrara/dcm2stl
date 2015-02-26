@@ -665,15 +665,15 @@ class dcm2stl(wx.Frame):
       # Slider coronal
       #-----------------------------------------
       text = wx.StaticText(self.sliderSliceDialog, id=wx.ID_ANY, label="Sagittal slice", pos=(20, 20))
-      slider0 = wx.Slider(self.sliderSliceDialog, id=wx.ID_ANY, value=self.vtkPipe.valCoronal, minValue=0, maxValue=self.vtkPipe.col-1, pos=(20, 40), size=(200, -1), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-      slider0.Bind(wx.EVT_SCROLL, self.onSliderCoronal)
+      slider0 = wx.Slider(self.sliderSliceDialog, id=wx.ID_ANY, value=self.vtkPipe.valSagittal, minValue=0, maxValue=self.vtkPipe.col-1, pos=(20, 40), size=(200, -1), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+      slider0.Bind(wx.EVT_SCROLL, self.onSliderSagittal)
       wx.StaticLine(self.sliderSliceDialog, id=wx.ID_ANY, style=wx.LI_HORIZONTAL, size=(200, -1), pos=(20, 80))
       #-----------------------------------------
       # Slider sagittal
       #-----------------------------------------
       text = wx.StaticText(self.sliderSliceDialog, id=wx.ID_ANY, label="Coronal slice", pos=(20, 100))
-      slider1 = wx.Slider(self.sliderSliceDialog, id=wx.ID_ANY, value=self.vtkPipe.valSagittal, minValue=0, maxValue=self.vtkPipe.lig-1, pos=(20, 120), size=(200, -1), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
-      slider1.Bind(wx.EVT_SCROLL, self.onSliderSagittal)
+      slider1 = wx.Slider(self.sliderSliceDialog, id=wx.ID_ANY, value=self.vtkPipe.valCoronal, minValue=0, maxValue=self.vtkPipe.lig-1, pos=(20, 120), size=(200, -1), style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS | wx.SL_LABELS)
+      slider1.Bind(wx.EVT_SCROLL, self.onSliderCoronal)
       wx.StaticLine(self.sliderSliceDialog, id=wx.ID_ANY, style=wx.LI_HORIZONTAL, size=(200, -1), pos=(20, 160))
       #-----------------------------------------
       # Slider transversal
