@@ -82,6 +82,7 @@ class dcm2stl(wx.Frame):
       #-----------------------------------------
       menuBar.Append(self.openMenu, "File")
       self.NewFiles  = self.openMenu.Append(wx.ID_NEW, 'N&ew\tCtrl-Shift-N', 'New reconstruction')
+      self.ImportSTL = self.openMenu.Append(wx.ID_FILE, 'I&mport STL\tCtrl-Shift-S', 'Open stl files')
       self.OpenFiles = self.openMenu.Append(wx.ID_OPEN, 'I&mport dicom\tCtrl-Shift-O', 'Open dicom files')
       self.openMenu.AppendSeparator()
       self.SaveSurface     = self.openMenu.Append(wx.ID_SAVE, 'E&xport Surface\tCtrl-Shift-E', 'Export Surface with stl format')
@@ -113,6 +114,7 @@ class dcm2stl(wx.Frame):
       self.toolsArtery  = self.toolsMenu.Append(wx.ID_ANY, 'A&rtery contour\tC', 'View artery contour', kind=wx.ITEM_CHECK)
       self.toolsInfoGeo = self.toolsMenu.Append(wx.ID_ANY, 'G&eometric information\tG', 'View geometric information', kind=wx.ITEM_CHECK)
       self.toolsInfoPat = self.toolsMenu.Append(wx.ID_ANY, 'P&atient information\tP', 'View patient information', kind=wx.ITEM_CHECK)
+      self.toolsInfoImportedStl = self.toolsMenu.Append(wx.ID_ANY, 'I&mported .stl\tI', 'View imported .stl geometry', kind=wx.ITEM_CHECK)
       #-----------------------------------------
       # Menu Slider
       #-----------------------------------------
@@ -150,7 +152,7 @@ class dcm2stl(wx.Frame):
       self.widget.SetInteractorStyle(style)
       self.widget.Enable(1)
       #-----------------------------------------
-      # Ad a renderer
+      # Add a renderer
       #-----------------------------------------
       self.ren = vtk.vtkRenderer()
       self.widget.GetRenderWindow().AddRenderer(self.ren)
@@ -167,6 +169,7 @@ class dcm2stl(wx.Frame):
       #-----------------------------------------
       self.Bind(wx.EVT_MENU, self.onNewFiles, self.NewFiles)
       self.Bind(wx.EVT_MENU, self.onOpenFiles, self.OpenFiles)
+      self.Bind(wx.EVT_MENU, self.onImportSTL, self.ImportSTL)
       self.Bind(wx.EVT_MENU, self.onSaveSurface, self.SaveSurface)
       self.Bind(wx.EVT_MENU, self.onSaveSurfaceMesh, self.SaveSurfaceMesh)
       self.Bind(wx.EVT_MENU, self.onPropos, self.Propos)
@@ -183,6 +186,7 @@ class dcm2stl(wx.Frame):
       self.Bind(wx.EVT_MENU, self.onToolsArtery, self.toolsArtery)
       self.Bind(wx.EVT_MENU, self.onToolsInfoGeo, self.toolsInfoGeo)
       self.Bind(wx.EVT_MENU, self.onToolsInfoPat, self.toolsInfoPat)
+      self.Bind(wx.EVT_MENU, self.onToolsInfoImportedStl, self.toolsInfoImportedStl)
       #-----------------------------------------
       # Bind the menu view
       #-----------------------------------------
@@ -232,6 +236,8 @@ class dcm2stl(wx.Frame):
          self.toolsArtery.Enable(boolean)
          self.toolsInfoGeo.Enable(boolean)
          self.toolsInfoPat.Enable(boolean)
+      if type == 'ImportedStl' or type == 'All' :
+         self.toolsInfoImportedStl.Enable(boolean)
       #-----------------------------------------
       # Menu Slider
       #-----------------------------------------
@@ -526,7 +532,18 @@ class dcm2stl(wx.Frame):
          self.vtkPipe.vtkInfoPatient()
       else :
          self.vtkPipe.vtkDeleteInfoPatient()
-
+         
+   def onToolsInfoImportedStl(self, evt):
+      "Affichage de la geometrie .stl importée"
+      if self.toolsInfoImportedStl.IsChecked():
+         self.vtkPipe.vtkImportSTLfile(self.stlPath)
+#         self.vtkPipe.valOpacity = 2
+#         self.vtkPipe.meshActor.GetProperty().SetOpacity(self.vtkPipe.valOpacity/10.0)
+#         self.vtkPipe.vtkRedraw()
+      else :
+         self.vtkPipe.vtkDeleteImportedStl()
+         
+         
    def onViewAll(self, evt):
       "Gestion de l'angle de visualisation"
       self.vtkPipe.ren.ResetCamera()
@@ -649,13 +666,17 @@ class dcm2stl(wx.Frame):
                         defaultFile="", wildcard=wildcard, style=wx.FD_OPEN )
 
       if dlg.ShowModal() == wx.ID_OK:
-         path = dlg.GetPath()
-         filename = dlg.GetFilename()
+         stlPath = dlg.GetPath()
+         self.filename = dlg.GetFilename()
+         self.stlPath = os.path.dirname(stlPath)+"/"+self.filename
+         self.sb.SetStatusText("You selected: %s" % self.stlPath)    
          #-----------------------------------------
          # Importation d'un fichier stl
          #-----------------------------------------
-         self.vtkPipe.vtkImportSTLfile(filename)
-
+         self.vtkPipe.vtkImportSTLfile(stlPath)
+         #activate the menu and check the option
+         self.menuActivate(True, 'ImportedStl')
+         self.toolsMenu.Check(self.toolsInfoImportedStl.GetId(), True)
       dlg.Destroy()
       
    def onSliderSlice(self, evt):
@@ -868,7 +889,7 @@ class dcm2stl(wx.Frame):
          self.vtkPipe.smoothAneurysm.SetNumberOfIterations(self.vtkPipe.valSmoothIter)
 
    def onSliderOpacity(self, evt):
-      """Gere l'opocite de la construction surfacique"""
+      """Gere l'opacite de la construction surfacique"""
       obj = evt.GetEventObject()
       self.vtkPipe.valOpacity = obj.GetValue()
       self.vtkPipe.aneurysm.GetProperty().SetOpacity(self.vtkPipe.valOpacity/10.0)

@@ -544,6 +544,13 @@ class vtkPipeline():
       
       self.ren.AddActor(self.meshActor)
       self.vtkRedraw()
+        
+   def vtkDeleteImportedStl(self):
+      """ Suppression du STL importé """
+      self.ren.RemoveActor(self.meshActor)
+      self.vtkRedraw()
+      self.meshActor = None
+
       
    def vtkImportSTLfile(self, path):
       """ Importation d'un fichier stl """
